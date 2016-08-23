@@ -1,0 +1,5 @@
+Error at line 3: Trying to assign a new value to a constant
+Error at line 5: Trying to assign a new value to a constant
+Error at line 7: Trying to assign a new value to a constant
+Error at line 10: Trying to assign a new value to a constant
+Error at line 12: Invalid operation: b + c (mismatched types: float and bool)

@@ -1,0 +1,10 @@
+Program
+  List
+    FunctionDeclaration
+      IdentifierDeclaration
+        UnknownType
+        Constant
+      List
+      VoidType
+      Block
+        List

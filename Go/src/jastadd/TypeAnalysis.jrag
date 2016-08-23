@@ -1,0 +1,253 @@
+aspect TypeAnalysis {
+
+	syn boolean Type.sameTypeAs(Type t){
+		return this.toString().equals(t.toString());
+	}
+
+	inh Type IdentifierDeclaration.linkedValueType();
+	eq Program.getChild().linkedValueType() = unknownType();
+	eq IdentifierDeclarationStatement.getIdentifierDeclaration().linkedValueType() = getValue().evaluatedType();
+	eq GlobalVariable.getIdentifierDeclaration().linkedValueType() = getExpression().evaluatedType();
+
+	syn Type Expression.evaluatedType();
+
+ 	syn Type FunctionCallAsExpression.evaluatedType() {
+		if (getIdentifierUse().declaration().isFunction()) {
+			return getIdentifierUse().declaration().linkedFunction().getReturnType();
+		} else {
+			return inferredType();
+		}
+	}
+
+	syn Type For.evaluatedType() {
+		return getCond().evaluatedType();
+	}
+
+	syn Type Arithmetic.evaluatedType() {
+		if(getLeft().evaluatedType().sameTypeAs(getRight().evaluatedType())
+				&& allowedType(getLeft().evaluatedType())
+				&& !getLeft().evaluatedType().sameTypeAs(mismatchedType())){
+			return getLeft().evaluatedType();
+		} else {
+			return unknownType();
+		}
+	}
+
+	syn Type Condition.evaluatedType() {
+		if(getLeft().evaluatedType().sameTypeAs(getRight().evaluatedType())
+				&& allowedType(getLeft().evaluatedType())
+				&& !getLeft().evaluatedType().sameTypeAs(mismatchedType())){
+			return boolType();
+		} else {
+			return unknownType();
+		}
+	}
+
+	syn boolean BinaryExpression.allowedType(Type t) {
+		return t.sameTypeAs(intType()) || t.sameTypeAs(floatType());
+	}
+
+	syn boolean Equal.allowedType(Type t) {
+		return t.sameTypeAs(intType()) || t.sameTypeAs(floatType()) || t.sameTypeAs(boolType());
+	}
+
+	syn boolean NotEqual.allowedType(Type t) {
+		return t.sameTypeAs(intType()) || t.sameTypeAs(floatType()) || t.sameTypeAs(boolType());
+	}
+
+	syn Type Int.evaluatedType() {
+		return intType();
+	}
+
+	syn Type Bool.evaluatedType() {
+		return boolType();
+	}
+
+	syn Type Float64.evaluatedType() {
+		return floatType();
+	}
+
+	syn Type NullValue.evaluatedType() {
+		return unknownType();
+	}
+
+	syn Type IdentifierUse.evaluatedType() {
+		return declaration().evaluatedType();
+	}
+
+	syn Type IdentifierDeclaration.evaluatedType() {
+		if (getType().sameTypeAs(inferredType())) {
+			return linkedValueType();
+		} else {
+			return getType();
+		}
+	}
+
+	inh boolean Expression.typeConflict();
+	eq Program.getChild().typeConflict() = false;
+
+	inh String Expression.typeErrorMsg();
+	eq Program.getChild().typeErrorMsg() = "If you read this, something is wrong";
+
+	eq GlobalVariable.getIdentifierDeclaration().typeConflict() {
+		boolean conflict = false;
+		Type assigningToType = getIdentifierDeclaration().getType();
+		Type valueType = getExpression().evaluatedType();
+
+		if (assigningToType.sameTypeAs(unknownType()) || valueType.sameTypeAs(unknownType())) {
+			// Do nothing
+		}	else if (assigningToType.sameTypeAs(inferredType())) {
+			conflict = valueType.sameTypeAs(mismatchedType()) || !(valueType.sameTypeAs(intType()) || valueType.sameTypeAs(boolType()) || valueType.sameTypeAs(floatType()));
+		} else if (!assigningToType.sameTypeAs(valueType)) {
+			conflict = true;
+		}
+
+		return conflict;
+	}
+
+	eq GlobalVariable.getIdentifierDeclaration().typeErrorMsg() {
+		String mutabilityStatus = getIdentifierDeclaration().getMutabilityStatus() instanceof Variable ? " variable" : " constant";
+		return "Trying to assign " + getExpression().evaluatedType() +
+						" to global " + getIdentifierDeclaration().getType() + mutabilityStatus;
+	}
+
+	eq For.getCond().typeConflict() {
+			boolean conflict = false;
+			Type valueType = getCond().evaluatedType();
+			if(!valueType.sameTypeAs(boolType())){
+				conflict = true;
+			}
+			return conflict;
+		}
+
+	eq For.getCond().typeErrorMsg() {
+		return "Expected type boolType but got " + getCond().evaluatedType();
+	}
+
+	private boolean Assignment.assigningToConstant = false;
+
+	eq Assignment.getIdentifierUse().typeConflict() {
+		boolean conflict = false;
+		Type assigningToType = getIdentifierUse().declaration().getType();
+		Type valueType = getValue().evaluatedType();
+
+		if (assigningToType.sameTypeAs(unknownType()) || valueType.sameTypeAs(unknownType())) {
+			// Do nothing
+		} else if (getIdentifierUse().declaration().getMutabilityStatus() instanceof Constant){
+			conflict = true;
+			assigningToConstant = true;
+		}	else if (assigningToType.sameTypeAs(inferredType())) {
+			conflict = valueType.sameTypeAs(mismatchedType()) || !(valueType.sameTypeAs(intType()) || valueType.sameTypeAs(boolType()) || valueType.sameTypeAs(floatType()));
+		} else if (!assigningToType.sameTypeAs(valueType)) {
+			conflict = true;
+		}
+		return conflict;
+	}
+
+	eq Assignment.getIdentifierUse().typeErrorMsg() {
+		String message;
+		if(assigningToConstant){
+			message = "Trying to assign a new value to a constant";
+		} else {
+			String mutabilityStatus = getIdentifierUse().declaration().getMutabilityStatus() instanceof Variable ? " variable" : " constant";
+			message = "Trying to assign " + getValue().evaluatedType() +
+							" to " + getIdentifierUse().declaration().getType() + mutabilityStatus;
+		}
+		return message;
+	}
+
+	private boolean IdentifierDeclarationStatement.noValueAssigned = false;
+
+	eq IdentifierDeclarationStatement.getIdentifierDeclaration().typeConflict() {
+		if (getIdentifierDeclaration().getMutabilityStatus() instanceof Constant && !hasValue()) {
+			noValueAssigned = true;
+			return true;
+		}
+		boolean conflict = false;
+		Type assigningToType = getIdentifierDeclaration().getType();
+		Type valueType = getValue().evaluatedType();
+
+		if (assigningToType.sameTypeAs(unknownType()) || valueType.sameTypeAs(unknownType())) {
+			// Do nothing
+		} else if (assigningToType.sameTypeAs(inferredType())) {
+			conflict = valueType.sameTypeAs(mismatchedType()) || !(valueType.sameTypeAs(intType()) || valueType.sameTypeAs(boolType()) || valueType.sameTypeAs(floatType()));
+		} else if (!assigningToType.sameTypeAs(valueType)) {
+			conflict = true;
+		}
+		return conflict;
+	}
+
+	eq IdentifierDeclarationStatement.getIdentifierDeclaration().typeErrorMsg() {
+		String message;
+		if(noValueAssigned){
+			message = "Must assign a starting value to constant";
+		} else {
+			String mutabilityStatus = getIdentifierDeclaration().getMutabilityStatus() instanceof Variable ? " variable" : " constant";
+			message = "Trying to assign " + getValue().evaluatedType() +
+							" to " + getIdentifierDeclaration().getType() + mutabilityStatus;
+		}
+		return message;
+	}
+
+	eq FunctionDeclaration.getIdentifierDeclaration().typeConflict() {
+		return getIdentifierDeclaration().getIdentifier().equals("main") && !getReturnType().sameTypeAs(voidType());
+	}
+
+	eq FunctionDeclaration.getIdentifierDeclaration().typeErrorMsg() {
+		return "Main function should be void";
+	}
+
+	eq Return.getValue().typeConflict() {
+		Type expectedReturnType = linkedFunction().getReturnType();
+		return !getValue().evaluatedType().sameTypeAs(expectedReturnType);
+	}
+
+	eq Return.getValue().typeErrorMsg(){
+		Type expectedReturnType = linkedFunction().getReturnType();
+		return "Trying to return " + getValue().evaluatedType() +
+						" in " + expectedReturnType + " function";
+	}
+	eq BinaryExpression.getLeft().typeConflict() {
+		return evaluatedType().sameTypeAs(unknownType()) && !getLeft().evaluatedType().sameTypeAs(unknownType()) && !getRight().evaluatedType().sameTypeAs(unknownType());
+	}
+
+	eq BinaryExpression.getLeft().typeErrorMsg() {
+		return "Invalid operation: " + toString() +
+		" (mismatched types: " + getLeft().evaluatedType() + " and " + getRight().evaluatedType() + ")";
+	}
+
+	syn boolean FunctionDeclaration.returnStatement() {
+		return getBody().returnStatement();
+	}
+
+	syn boolean Block.returnStatement() {
+		for(Statement stmts : getStatements()){
+			if(stmts.returnStatement()){
+				return true;
+			}
+		}
+		return false;
+	}
+
+	syn boolean Statement.returnStatement() = false;
+
+	eq Return.returnStatement() = true;
+
+	eq If.returnStatement() {
+		if(hasElse()){
+			return getBody().returnStatement() && getElse().returnStatement();
+		}else{
+			return false;
+		}
+	}
+
+	syn boolean FunctionDeclaration.deadCode(){
+		Block body = getBody();
+		for (int i = 0; i < body.getNumStatement(); ++i) {
+			if(body.getStatement(i).returnStatement() && i < body.getNumStatement() - 1){
+					return true;
+			}
+		}
+		return false;
+	}
+}

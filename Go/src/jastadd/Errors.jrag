@@ -1,0 +1,79 @@
+import java.util.Set;
+import java.util.TreeSet;
+
+aspect Errors {
+	public class ErrorMessage implements Comparable<ErrorMessage> {
+		protected final String message;
+		protected final int lineNumber;
+		public ErrorMessage(String message, int lineNumber) {
+			this.message = message;
+			this.lineNumber = lineNumber;
+		}
+		public int compareTo(ErrorMessage other) {
+			if (lineNumber == other.lineNumber) {
+				return message.compareTo(other.message);
+			}
+			return Integer.compare(lineNumber, other.lineNumber);
+		}
+		public String toString() {
+			return "Error at line " + lineNumber + ": " + message;
+		}
+	}
+	protected ErrorMessage ASTNode.error(String message) {
+		return new ErrorMessage(message, getLine(getStart()));
+	}
+
+	coll Set<ErrorMessage> Program.errors() [new TreeSet<ErrorMessage>()] with add root Program;
+
+	inh Program ASTNode.program();
+	eq Program.getChild().program() = this;
+}
+
+
+aspect ErrorContributions {
+
+	// UNKNOWN NAME
+	IdentifierUse contributes error("symbol '" + getIdentifier() + "' is not declared")
+		when declaration().isUnknown()
+		to Program.errors() for program();
+
+	// MULTIPLE DEFINITIONS
+	IdentifierDeclaration contributes error("symbol '" + getIdentifier() + "' is already declared!")
+		when isMultiplyDeclared()
+		to Program.errors() for program();
+
+	// CIRCULAR
+	IdentifierUse contributes error("the definition of symbol '" + getIdentifier() + "' is circular")
+		when isCircular()
+		to Program.errors() for program();
+
+	// TYPECONFLICT
+	Expression contributes error(typeErrorMsg())
+		when typeConflict()
+		to Program.errors() for program();
+
+	// VARIABLE AS METHOD & METHOD AS VARIABLE
+	IdentifierUse contributes error("Variable being used as function: " + getIdentifier())
+		when declaration() != UnknownDeclaration() && (declaration().isVariable() && usedByFunction())
+		to Program.errors() for program();
+
+	IdentifierUse contributes error("Function being used as variable: " + getIdentifier())
+		when declaration().isFunction() && !usedByFunction()
+		to Program.errors() for program();
+
+	// PARAMMISMATCH
+	FunctionCallAsExpression contributes error("Mismatch between number of requested and given parameters for function: "
+				+ getIdentifierUse().getIdentifier() + " (Expected: " + getIdentifierUse().declaration().numberOfParameters() + " Given: " + getNumParameter() + ")")
+		when amountOfParamsMismatch()
+		to Program.errors() for program();
+
+		// Missing return statements
+	FunctionDeclaration contributes error("Function " + getIdentifierDeclaration().getIdentifier() + "() missing return statement")
+		when !returnStatement() && !getReturnType().sameTypeAs(voidType()) && !getIdentifierDeclaration().typeConflict()
+		to Program.errors() for program();
+
+		// Dead code
+	FunctionDeclaration contributes error("Function " + getIdentifierDeclaration().getIdentifier() + "() contains dead code")
+		when deadCode()
+		to Program.errors() for program();
+}

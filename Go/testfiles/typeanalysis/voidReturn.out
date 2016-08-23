@@ -1,0 +1,2 @@
+Error at line 9: Trying to return int in void function
+Error at line 13: Trying to return float in void function

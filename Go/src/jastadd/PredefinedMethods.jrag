@@ -1,0 +1,7 @@
+aspect PredefinedFunctions {
+  syn nta List<FunctionDeclaration> Program.predefinedFunctions() {
+    List<FunctionDeclaration> list = new List<FunctionDeclaration>();
+    list.add(new FunctionDeclaration(new IdentifierDeclaration(new VoidType(),"print", new Constant()), new List<IdentifierDeclaration>(new IdentifierDeclaration()), new VoidType(), new Block(new List<Statement>())));
+    return list;
+  }
+}

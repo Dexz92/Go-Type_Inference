@@ -1,0 +1,86 @@
+aspect LinkedFunction{
+  inh FunctionDeclaration IdentifierDeclaration.linkedFunction();
+  inh FunctionDeclaration Statement.linkedFunction();
+  eq Program.getChild().linkedFunction() = null;
+  eq FunctionDeclaration.getChild().linkedFunction() = this;
+
+}
+
+aspect UniqueNamesAndIndexes {
+    inh String Statement.idIndex();
+    eq FunctionDeclaration.getBody().idIndex() = "";
+    eq Block.getStatement(int index).idIndex() = idIndex() + index + "_";
+
+    inh String IdentifierDeclaration.uniqueName();
+    eq Program.getChild().uniqueName() = UnknownDeclaration().getIdentifier();
+
+    eq GlobalVariable.getIdentifierDeclaration().uniqueName() = "global_" + getIdentifierDeclaration().getIdentifier();
+    eq IdentifierDeclarationStatement.getIdentifierDeclaration().uniqueName() = idIndex() + getIdentifierDeclaration().getIdentifier();
+    eq FunctionDeclaration.getIdentifierDeclaration().uniqueName() = getIdentifierDeclaration().getIdentifier();
+    eq FunctionDeclaration.getParameter(int index).uniqueName() = getParameter(index).getIdentifier();
+}
+
+aspect ToString {
+  syn String Type.toString();
+  eq IntType.toString() = "int";
+  eq BoolType.toString() = "bool";
+  eq FloatType.toString() = "float";
+  eq InferredType.toString() = "inferred";
+  eq VoidType.toString() = "void";
+  eq UnknownType.toString() = "unknown type";
+  eq MismatchedType.toString() = "mismatched types";
+
+  syn String Expression.toString();
+	syn String BinaryExpression.toString() {
+		return getLeft().toString() + " " + operation() + " " + getRight().toString();
+	}
+	syn String Value.toString() = getValue();
+	syn String FunctionCallAsExpression.toString() = getIdentifierUse().toString();
+	syn String IdentifierUse.toString() = getIdentifier();
+	syn String IdentifierDeclaration.toString() = getIdentifier();
+}
+
+aspect BinaryOperations {
+  syn String BinaryExpression.operation();
+  eq Add.operation() = "+";
+  eq Sub.operation() = "-";
+  eq Mul.operation() = "*";
+  eq Div.operation() = "/";
+  eq Mod.operation() = "%";
+  eq Equal.operation() = "==";
+  eq NotEqual.operation() = "!=";
+  eq LessEqual.operation() = "<=";
+  eq GreaterEqual.operation() = ">=";
+  eq Lesser.operation() = "<";
+  eq Greater.operation() = ">";
+}
+
+aspect NTAs {
+  	syn nta UnknownType Program.unknownType() = new UnknownType();
+  	inh UnknownType ASTNode.unknownType();
+  	eq Program.getChild().unknownType() = unknownType();
+
+  	syn nta IntType Program.intType() = new IntType();
+  	inh IntType ASTNode.intType();
+  	eq Program.getChild().intType() = intType();
+
+  	syn nta BoolType Program.boolType() = new BoolType();
+  	inh BoolType ASTNode.boolType();
+  	eq Program.getChild().boolType() = boolType();
+
+  	syn nta FloatType Program.floatType() = new FloatType();
+  	inh FloatType ASTNode.floatType();
+  	eq Program.getChild().floatType() = floatType();
+
+  	syn nta VoidType Program.voidType() = new VoidType();
+  	inh VoidType ASTNode.voidType();
+  	eq Program.getChild().voidType() = voidType();
+
+  	syn nta InferredType Program.inferredType() = new InferredType();
+  	inh InferredType ASTNode.inferredType();
+  	eq Program.getChild().inferredType() = inferredType();
+
+  	syn nta MismatchedType Program.mismatchedType() = new MismatchedType();
+  	inh MismatchedType ASTNode.mismatchedType();
+  	eq Program.getChild().mismatchedType() = mismatchedType();
+}

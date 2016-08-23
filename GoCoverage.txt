@@ -1,0 +1,42 @@
+var global1 int = 1;
+var global2 float64 = 1.0;
+var global3 bool = true;
+var global4 = 1;
+
+func func1() int {
+	return 1;
+}
+
+func func2() bool {
+	return true;
+}
+
+func func3() float64 {
+	return 1.0;
+}
+
+func func4(t1 int, t2 bool, t3 float64) {
+
+}
+
+func main() {
+	var a int = 1;
+	var b bool = true;
+	var c float64 = 1.1;
+	var a2 = a;
+	a3 := a2;
+
+	const d1 int = 1;
+	const d2 float64 = 1.0;
+	const d3 bool = true;
+
+	var e1 int;
+	var e2 bool;
+	var e3 float64;
+
+	var f1 int = func1();
+	var f2 bool = func2();
+	var f3 float64 = func3();
+
+	func4(f1, f2, f3);
+}

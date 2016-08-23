@@ -1,0 +1,356 @@
+import java.util.LinkedHashMap;
+import java.util.Map.Entry;
+import java.util.Set;
+
+aspect Interpreter{
+  public class ValueContainer {
+    private int intValue;
+    private float floatValue;
+    private boolean boolValue;
+    private String type;
+
+    public ValueContainer(int value) {
+      intValue = value;
+      floatValue = (float) value;
+      type = "int";
+    }
+
+    public ValueContainer(float value) {
+      floatValue = value;
+      intValue = (int) value;
+      type = "float";
+    }
+
+    public ValueContainer(boolean value) {
+       boolValue = value;
+       type = "bool";
+     }
+
+     public int getInt() { return intValue; }
+
+     public float getFloat() { return floatValue; }
+
+     public boolean getBool() { return boolValue; }
+
+     public String getType() { return type; }
+
+     public void setValue(int value) {
+       intValue = value;
+       floatValue = (float) value;
+     }
+
+     public void setValue(float value) {
+       floatValue = value;
+       intValue = (int) value;
+     }
+
+     public void setValue(boolean value) {
+       boolValue = value;
+     }
+
+     public String toString() {
+       String stringRepresentation;
+       if (type.equals("int")) {
+         stringRepresentation = Integer.toString(intValue);
+       } else if (type.equals("float")) {
+         stringRepresentation = Float.toString(floatValue);
+       } else {
+         stringRepresentation = Boolean.toString(boolValue);
+       }
+       return stringRepresentation;
+     }
+  }
+
+  public class ActivationRecord{
+    private LinkedHashMap<String, ValueContainer> records;
+
+    public ActivationRecord(){
+      records = new LinkedHashMap<String, ValueContainer>();
+    }
+
+    public void put(String name, ValueContainer container){
+      records.put(name, container);
+    }
+
+    public ValueContainer get(String name){
+      return records.get(name);
+    }
+
+    public Set<Entry<String, ValueContainer>> entrySet() {
+      return records.entrySet();
+    }
+  }
+
+  public class ReturnStatement extends Exception {
+    private ValueContainer valueContainer;
+
+    public ReturnStatement() {
+      super();
+    }
+
+    public ReturnStatement(ValueContainer value) {
+      super();
+      valueContainer = value;
+    }
+
+    public ReturnStatement(String message) {
+        super(message);
+    }
+
+    public boolean hasValue() {
+      return valueContainer != null;
+    }
+
+    public ValueContainer getValue() {
+      return valueContainer;
+    }
+  }
+
+  public void Program.eval(){
+    try {
+      int mainFunctionIndex = -1;
+      ActivationRecord startingRecord = new ActivationRecord();
+
+      for(int i = 0; i < getNumGlobal(); ++i){
+        if(getGlobal(i).getIdentifierDeclaration().getIdentifier().equals("main")){
+          mainFunctionIndex = i;
+        }
+
+        if (getGlobal(i) instanceof GlobalVariable) {
+          GlobalVariable globalVariable = (GlobalVariable) getGlobal(i);
+          startingRecord.put(globalVariable.getIdentifierDeclaration().uniqueName(), globalVariable.getExpression().eval(startingRecord));
+        }
+      }
+
+      if (mainFunctionIndex >= 0) {
+        ValueContainer returnCode = ((FunctionDeclaration) getGlobal(mainFunctionIndex)).eval(startingRecord);
+        return;
+      }
+
+      throw new RuntimeException("Could not find a main function");
+    } catch(RuntimeException e){
+      System.out.println(e.getMessage());
+    }
+  }
+
+  public ValueContainer FunctionDeclaration.eval(ActivationRecord actrec){
+    if(getBody().getNumStatement() > 0) {
+
+      try{
+          getBody().eval(actrec);
+      }catch(ReturnStatement rs){
+        if (rs.hasValue()) {
+        actrec.put("return", rs.getValue());
+        }
+      }
+    }
+
+    return actrec.get("return");
+  }
+
+  public void FunctionCallAsStatement.eval(ActivationRecord actrec) throws ReturnStatement{
+    getFunctionCallAsExpression().eval(actrec);
+  }
+
+  public void For.eval(ActivationRecord actrec) throws ReturnStatement{
+    if (hasShortStatement()) {
+      getShortStatement().eval(actrec);
+    }
+
+    if (hasCond()) {
+      while(getCond().eval(actrec).getBool() == true){
+        getBody().eval(actrec);
+        if (hasAssignment()) {
+          getAssignment().eval(actrec);
+        }
+      }
+    } else {
+      while(true) {
+        getBody().eval(actrec);
+        if (hasAssignment()) {
+          getAssignment().eval(actrec);
+        }
+      }
+    }
+  }
+
+  public void If.eval(ActivationRecord actrec) throws ReturnStatement{
+    if (hasShortStatement()) {
+      getShortStatement().eval(actrec);
+    }
+    if(getCond().eval(actrec).getBool() == true){
+      getBody().eval(actrec);
+    }else{
+      if(hasElse()){
+        getElse().eval(actrec);
+      }
+    }
+  }
+
+  public void Assignment.eval(ActivationRecord actrec) throws ReturnStatement{
+    actrec.put(getIdentifierUse().declaration().uniqueName(), getValue().eval(actrec));
+  }
+
+  public void IdentifierDeclarationStatement.eval(ActivationRecord actrec) throws ReturnStatement{
+    actrec.put(getIdentifierDeclaration().uniqueName(), getValue().eval(actrec));
+  }
+
+  public void Return.eval(ActivationRecord actrec) throws ReturnStatement{
+      if (hasValue()) {
+      throw new ReturnStatement(getValue().eval(actrec));
+    } else {
+      throw new ReturnStatement();
+    }
+  }
+
+  public void Block.eval(ActivationRecord actrec) throws ReturnStatement{
+    for(Statement statment : getStatementList()){
+      statment.eval(actrec);
+    }
+  }
+
+  public ValueContainer FunctionCallAsExpression.eval(ActivationRecord actrec){
+    if(getIdentifierUse().getIdentifier().equals("print")){
+      System.out.println(getParameter(0).eval(actrec));
+    }else{
+      ActivationRecord newRecord = new ActivationRecord();
+      FunctionDeclaration function = (FunctionDeclaration)(getIdentifierUse().declaration().linkedFunction());
+      for(int i = 0; i < getNumParameter(); ++i){
+        newRecord.put(function.getParameter(i).uniqueName(), getParameter(i).eval(actrec));
+      }
+      if(getIdentifierUse().declaration() != null) {
+        return getIdentifierUse().declaration().linkedFunction().eval(newRecord);
+      }
+    }
+    return null;
+  }
+
+  public ValueContainer IdentifierUse.eval(ActivationRecord actrec){
+    return actrec.get(declaration().uniqueName());
+  }
+
+  public ValueContainer Int.eval(ActivationRecord actrec){
+    return new ValueContainer(Integer.parseInt(getValue()));
+  }
+
+  public ValueContainer Float64.eval(ActivationRecord actrec){
+    return new ValueContainer(Float.parseFloat(getValue()));
+  }
+
+  public ValueContainer Bool.eval(ActivationRecord actrec){
+    boolean value = getValue().equals("true") ? true : false;
+    return new ValueContainer(value);
+  }
+
+  public void Statement.eval(ActivationRecord actrec) throws ReturnStatement{
+    throw new RuntimeException("1");
+  }
+
+  public ValueContainer Expression.eval(ActivationRecord actrec){
+    throw new RuntimeException("1");
+  }
+
+  public abstract ValueContainer BinaryExpression.binaryOperation(ValueContainer left, ValueContainer right, String type);
+
+  public ValueContainer Add.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() + right.getInt());
+    } else {
+      return new ValueContainer(left.getFloat() + right.getFloat());
+    }
+  }
+
+  public ValueContainer Sub.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() - right.getInt());
+    } else {
+      return new ValueContainer(left.getFloat() - right.getFloat());
+    }
+  }
+
+  public ValueContainer Mul.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() * right.getInt());
+    } else {
+      return new ValueContainer(left.getFloat() * right.getFloat());
+    }
+  }
+
+  public ValueContainer Div.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() / right.getInt());
+    } else {
+      return new ValueContainer(left.getFloat() / right.getFloat());
+    }
+  }
+
+  public ValueContainer Mod.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() % right.getInt());
+    } else {
+      return new ValueContainer(left.getFloat() % right.getFloat());
+    }
+  }
+
+  public ValueContainer Equal.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() == right.getInt());
+    } else if (type.equals("float")) {
+      return new ValueContainer(left.getFloat() == right.getFloat());
+    } else {
+      return new ValueContainer(left.getBool() == right.getBool());
+    }
+  }
+
+  public ValueContainer NotEqual.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() != right.getInt());
+    } else if (type.equals("float")) {
+      return new ValueContainer(left.getFloat() != right.getFloat());
+    } else {
+      return new ValueContainer(left.getBool() != right.getBool());
+    }
+  }
+
+  public ValueContainer LessEqual.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() <= right.getInt());
+    } else {
+      return new ValueContainer(left.getFloat() <= right.getFloat());
+    }
+  }
+
+  public ValueContainer GreaterEqual.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() >= right.getInt());
+    } else {
+      return new ValueContainer(left.getFloat() >= right.getFloat());
+    }
+  }
+
+  public ValueContainer Lesser.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() < right.getInt());
+    } else {
+      return new ValueContainer(left.getFloat() < right.getFloat());
+    }
+  }
+
+  public ValueContainer Greater.binaryOperation(ValueContainer left, ValueContainer right, String type) {
+    if (type.equals("int")) {
+      return new ValueContainer(left.getInt() > right.getInt());
+    } else {
+      return new ValueContainer(left.getFloat() > right.getFloat());
+    }
+  }
+
+  public ValueContainer BinaryExpression.eval(ActivationRecord actrec) {
+    ValueContainer leftValue = getLeft().eval(actrec);
+    ValueContainer rightValue = getRight().eval(actrec);
+
+    if (leftValue.getType().equals(rightValue.getType())) {
+      return binaryOperation(leftValue, rightValue, leftValue.getType());
+    }
+    throw new RuntimeException("1");
+  }
+}

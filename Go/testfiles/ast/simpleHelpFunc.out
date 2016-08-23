@@ -1,0 +1,24 @@
+Program
+  List
+    FunctionDeclaration
+      IdentifierDeclaration
+        UnknownType
+        Constant
+      List
+      VoidType
+      Block
+        List
+          FunctionCallAsStatement
+            FunctionCallAsExpression
+              InferredType
+              IdentifierUse
+                InferredType
+              List
+    FunctionDeclaration
+      IdentifierDeclaration
+        UnknownType
+        Constant
+      List
+      VoidType
+      Block
+        List

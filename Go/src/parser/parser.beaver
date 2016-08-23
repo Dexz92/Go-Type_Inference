@@ -1,0 +1,255 @@
+%class "LangParser";
+%package "lang.ast";
+
+%embed {:
+	static public class SyntaxError extends RuntimeException { public SyntaxError(String msg) {super(msg);}}
+	// Disable syntax error recovery
+	protected void recoverFromError(Symbol token, TokenStream in) {
+		throw new SyntaxError("Cannot recover from the syntax error");
+	}
+:};
+
+%terminals ASSIGN, LP, RP, LB, RB, COMMA, ID, RETURN, FUNC, VAR, CONST, SHORTASSIGN, SEMI;
+%terminals INT, BOOL, FLOAT64, INTVALUE, BOOLVALUE, FLOAT64VALUE;
+%terminals ADD, SUB, MUL, DIV, MOD, EQ, NE, LE, GE, LT, GT;
+%terminals IF,ELSE,FOR;
+
+%typeof program = "Program";
+%typeof functionDeclaration = "FunctionDeclaration";
+%typeof globalVariable = "GlobalVariable";
+
+%typeof block = "Block";
+%typeof statement = "Statement";
+
+%typeof globalList = "List";
+%typeof argumentList = "List";
+%typeof parameterDeclarationList = "List";
+%typeof functionParameterList = "List";
+%typeof statementList = "List";
+
+%typeof for = "For";
+%typeof if = "If";
+
+%typeof functionCallAsStatement = "FunctionCallAsStatement";
+%typeof variableDeclaration = "IdentifierDeclarationStatement";
+%typeof assignment = "Assignment";
+%typeof return = "Return";
+%typeof returnCondition = "Opt";
+
+%typeof functionCallAsExpression = "FunctionCallAsExpression";
+%typeof initialValue = "Expression";
+%typeof condition = "Expression";
+%typeof exprValue = "Expression";
+%typeof term = "Expression";
+%typeof factor = "Expression";
+
+%typeof type = "Type";
+%typeof varType = "Type";
+%typeof funcType = "Type";
+
+%typeof globalIdentifier = "IdentifierDeclaration";
+%typeof functionIdentifier = "IdentifierDeclaration";
+%typeof parameterIdentifier = "IdentifierDeclaration";
+%typeof variableIdentifier = "IdentifierDeclaration";
+
+%typeof mutability = "MutableValue";
+
+%typeof identifierUse = "IdentifierUse";
+%typeof value = "Value";
+
+%typeof shortStatement = "Opt";
+%typeof forOptCondition = "Opt";
+%typeof forOperation = "Opt";
+%typeof elseBlock = "Opt";
+
+%goal program;
+
+program = globalList.a {: return new Program(a); :};
+
+globalList =
+						globalList.a	functionDeclaration.b	{: return a.add(b); :}
+					| globalList.a	globalVariable.b			{: return a.add(b); :}
+					|																			{: return new List(); :} /* EMPTY PARAMLIST */
+					;
+
+globalVariable =
+						globalIdentifier.a ASSIGN condition.b SEMI {: return new GlobalVariable(a, b); :};
+
+globalIdentifier =
+						mutability.c ID.a varType.type {: return new IdentifierDeclaration(type,a, c); :};
+
+mutability =
+						VAR		{: return new Variable(); :}
+					|	CONST	{: return new Constant(); :}
+					;
+
+type =
+						INT			{: return new IntType(); :}
+					| BOOL		{: return new BoolType(); :}
+					| FLOAT64	{: return new FloatType(); :}
+					;
+
+varType =
+					  type
+					|					{: return new InferredType(); :}
+					;
+
+funcType =
+					  type
+					|					{: return new VoidType(); :}
+					;
+
+functionDeclaration =
+						FUNC functionIdentifier.a LP functionParameterList.b RP funcType.c LB block.d RB	{: return new FunctionDeclaration(a, b, c, d); :};
+
+functionIdentifier = ID.a {: return new IdentifierDeclaration(new UnknownType(), a, new Constant()); :};
+
+functionParameterList =
+						parameterDeclarationList.a	{: return a; :}
+					|															{: return new List(); :}
+					;
+
+parameterDeclarationList =
+					  parameterDeclarationList.a COMMA parameterIdentifier.b	{: return a.add(b); :}
+					| parameterIdentifier.a																		{: return new List().add(a); :}
+					;
+
+parameterIdentifier = ID.a type.b	{: return new IdentifierDeclaration(b, a, new Variable()); :};
+
+block = statementList.a {: return new Block(a); :};
+
+statementList =
+						statementList.a statement.b	{: return a.add(b); :}
+					|															{: return new List(); :} /* EMPTY STMTLIST */
+					;
+
+statement =
+						variableDeclaration
+					| assignment
+					| return
+					| functionCallAsStatement
+					| for
+					| if
+					;
+
+for =
+						FOR shortStatement.a forOptCondition.b SEMI forOperation.c LB block.d RB {: return new For(a, b, c, d); :}
+					| FOR forOptCondition.b LB block.d RB {: return new For(new Opt(), b, new Opt(), d); :}
+					;
+
+shortStatement =
+						variableDeclaration.a			{: return new Opt(a); :}
+					| assignment.a 				 			{: return new Opt(a); :}
+					| functionCallAsStatement.a	{: return new Opt(a); :}
+					|	SEMI								 			{: return new Opt();  :}
+					;
+
+forOptCondition =
+						condition.a	{: return new Opt(a); :}
+					|							{: return new Opt(); :}
+					;
+
+forOperation =
+						identifierUse.a ASSIGN condition.b	{: return new Opt(new Assignment(a, b)); :}
+					|																			{: return new Opt(); :}
+					;
+
+if =
+						IF shortStatement.a condition.b LB block.c RB elseBlock.d {: return new If(a, b, c, d); :}
+					| IF condition.b LB block.c RB elseBlock.d {: return new If(new Opt(), b, c, d); :}
+					;
+
+elseBlock =
+						ELSE LB block.a RB	{: return new Opt(a); :}
+					| 										{: return new Opt(); :}
+					;
+
+
+variableDeclaration = variableIdentifier.a initialValue.b SEMI
+	{:
+		Expression val = b;
+
+		if (b instanceof NullValue) {
+			if (a.getMutabilityStatus() instanceof Constant) {
+				return new IdentifierDeclarationStatement(a, new Opt());
+			}
+			if (a.getType() instanceof IntType) {
+				val = new Int(new IntType(),"0");
+			} else if (a.getType() instanceof BoolType) {
+				val = new Bool(new BoolType(),"false");
+			} else if (a.getType() instanceof FloatType) {
+				val = new Float64(new FloatType(),"0.000000");
+			}
+		}
+		return new IdentifierDeclarationStatement(a, new Opt(val));
+	:};
+
+variableIdentifier =
+						mutability.c ID.a varType.b ASSIGN	{: return new IdentifierDeclaration(b, a, c); :}
+					|	mutability.c ID.a varType.b					{: return new IdentifierDeclaration(b, a, c); :}
+					| ID.a SHORTASSIGN										{: return new IdentifierDeclaration(new InferredType(), a, new Variable()); :}
+					;
+
+initialValue =
+						condition.a	{: return a; :}
+					| 						{: return new NullValue(new UnknownType(),"null"); :}
+					;
+
+assignment = identifierUse.a ASSIGN condition.b SEMI {: return new Assignment(a,b); :};
+
+return = RETURN returnCondition.a SEMI {: return new Return(a); :};
+
+returnCondition =
+						condition.a	{: return new Opt(a); :}
+					|							{: return new Opt(); :}
+					;
+
+functionCallAsStatement = functionCallAsExpression.a SEMI {: return new FunctionCallAsStatement(a); :};
+
+functionCallAsExpression =
+						identifierUse.a LP argumentList.b RP 	{: return new FunctionCallAsExpression(new InferredType(),a,b); :}
+					| identifierUse.a LP RP 								{: return new FunctionCallAsExpression(new InferredType(),a,new List()); :}
+					;
+
+argumentList =
+						argumentList.a COMMA condition.b	{: return a.add(b); :}
+					| condition.a												{: return new List().add(a); :}
+					;
+
+condition =
+					  condition.a EQ exprValue.b {: return new Equal(new BoolType(),a,b); :}
+					| condition.a NE exprValue.b {: return new NotEqual(new BoolType(),a,b); :}
+					| condition.a LE exprValue.b {: return new LessEqual(new BoolType(),a,b); :}
+					| condition.a GE exprValue.b {: return new GreaterEqual(new BoolType(),a,b); :}
+					| condition.a LT exprValue.b {: return new Lesser(new BoolType(),a,b); :}
+					| condition.a GT exprValue.b {: return new Greater(new BoolType(),a,b); :}
+					| exprValue
+					;
+
+
+exprValue =
+					  exprValue.a ADD term.b {: return new Add(new InferredType(),a,b); :}
+					| exprValue.a SUB term.b {: return new Sub(new InferredType(),a,b); :}
+					| term
+					;
+
+term =
+				    term.a MUL factor.b {: return new Mul(new InferredType(),a,b); :}
+					| term.a DIV factor.b {: return new Div(new InferredType(),a,b); :}
+					| term.a MOD factor.b {: return new Mod(new InferredType(),a,b); :}
+					| factor
+					;
+
+factor =    LP exprValue RP
+					| value
+					| identifierUse
+					| functionCallAsExpression
+					;
+
+value =
+					  INTVALUE.a			{: return new Int(new IntType(),a); :}
+					| BOOLVALUE.a			{: return new Bool(new BoolType(),a); :}
+					| FLOAT64VALUE.a	{: return new Float64(new FloatType(),a); :}
+					;
+
+identifierUse = ID.a {: return new IdentifierUse(new InferredType(),a); :};

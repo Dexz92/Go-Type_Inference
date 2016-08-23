@@ -1,0 +1,5 @@
+Error at line 7: Invalid operation: int1 + bool1 (mismatched types: int and bool)
+Error at line 8: Invalid operation: bool1 + int2 (mismatched types: bool and int)
+Error at line 9: Invalid operation: int1 + int2 + bool1 (mismatched types: int and bool)
+Error at line 10: Invalid operation: int1 + bool1 (mismatched types: int and bool)
+Error at line 11: Invalid operation: int1 + int2 + bool1 (mismatched types: int and bool)

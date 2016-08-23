@@ -1,0 +1,4 @@
+Error at line 2: Invalid operation: true + 3 (mismatched types: bool and int)
+Error at line 4: Trying to assign int to global float variable
+Error at line 8: Invalid operation: a + c (mismatched types: int and float)
+Error at line 9: Trying to assign float to int variable

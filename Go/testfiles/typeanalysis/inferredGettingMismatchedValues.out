@@ -1,0 +1,1 @@
+Error at line 2: Invalid operation: 5 + true (mismatched types: int and bool)

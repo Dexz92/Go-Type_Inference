@@ -1,0 +1,136 @@
+import java.util.Set;
+import java.util.HashSet;
+
+aspect NameAnalysis {
+  // Program
+  // Checks for predefined functions
+  syn IdentifierDeclaration Program.localLookup(String name) {
+    for (FunctionDeclaration fDecl : predefinedFunctions()) {
+      if (fDecl.getIdentifierDeclaration().getIdentifier().equals(name)) {
+        return fDecl.getIdentifierDeclaration();
+      }
+    }
+
+    for (Global gDecl : getGlobals()) {
+      if (gDecl.getIdentifierDeclaration().getIdentifier().equals(name)) {
+        return gDecl.getIdentifierDeclaration();
+      }
+    }
+
+    return UnknownDeclaration();
+  }
+
+  eq Program.getChild().lookup(String name) = localLookup(name);
+
+  // FunctionDeclaration
+  syn IdentifierDeclaration FunctionDeclaration.localLookup(String name) {
+    for (IdentifierDeclaration param : getParameters()) {
+      if (param.getIdentifier().equals(name)) {
+        return param;
+      }
+    }
+
+    return UnknownDeclaration();
+  }
+
+  eq FunctionDeclaration.getParameter().lookup(String name) {
+    IdentifierDeclaration decl = localLookup(name);
+    return !decl.isUnknown() ? decl : lookup(name);
+  }
+
+  eq FunctionDeclaration.getBody().lookup(String name) {
+    IdentifierDeclaration decl = localLookup(name);
+    return !decl.isUnknown() ? decl : lookup(name);
+  }
+
+  inh IdentifierDeclaration FunctionDeclaration.lookup(String name);
+
+  // ControlStatement
+  syn IdentifierDeclaration ControlStatement.localLookup(String name) {
+    if (getShortStatement() instanceof IdentifierDeclarationStatement) {
+      IdentifierDeclarationStatement stmt = (IdentifierDeclarationStatement) getShortStatement();
+      if (stmt.getIdentifierDeclaration().toString().equals(name)) {
+        return stmt.getIdentifierDeclaration();
+      }
+    }
+    return UnknownDeclaration();
+  }
+
+  eq ControlStatement.getChild().lookup(String name) {
+    IdentifierDeclaration decl = localLookup(name);
+    return !decl.isUnknown() ? decl : lookup(name);
+  }
+
+  inh IdentifierDeclaration ControlStatement.lookup(String name);
+
+  // Block
+  syn IdentifierDeclaration Block.localLookup(String name, int until) {
+    for (int i = 0; i <= until; ++i) {
+      Statement stmt = getStatement(i);
+      if (stmt.newDeclaration() && stmt.identifierName().equals(name)) {
+        return ((IdentifierDeclarationStatement) stmt).getIdentifierDeclaration();
+      }
+    }
+
+    return UnknownDeclaration();
+  }
+
+  eq Block.getStatement(int index).lookup(String name){
+    IdentifierDeclaration decl = localLookup(name, index);
+    return !decl.isUnknown() ? decl : lookup(name);
+  }
+
+  inh IdentifierDeclaration Block.lookup(String name);
+
+  // IdentifierUse
+  syn IdentifierDeclaration IdentifierUse.declaration() = lookup(getIdentifier());
+  inh IdentifierDeclaration IdentifierUse.lookup(String name);
+
+  // IdentifierDeclaration
+  inh IdentifierDeclaration IdentifierDeclaration.lookup(String name);
+  syn boolean IdentifierDeclaration.isMultiplyDeclared() = lookup(getIdentifier()) != this;
+
+  // To be able to check for new declarations
+  syn boolean Statement.newDeclaration() = false;
+  syn String Statement.identifierName() = "";
+  eq IdentifierDeclarationStatement.newDeclaration() = true;
+  eq IdentifierDeclarationStatement.identifierName() = getIdentifierDeclaration().getIdentifier();
+}
+
+aspect CircularDefinitions {
+	syn boolean IdentifierUse.isCircular() = inExprOf(declaration());
+
+	inh boolean IdentifierUse.inExprOf(IdentifierDeclaration decl);
+	inh boolean Assignment.inExprOf(IdentifierDeclaration decl);
+
+	eq IdentifierDeclarationStatement.getValue().inExprOf(IdentifierDeclaration decl) = getIdentifierDeclaration() == decl;
+
+	eq Program.getChild().inExprOf(IdentifierDeclaration decl) = false;
+}
+
+aspect Nameconflicts {
+
+  // Variable as function & function as variable
+  inh boolean IdentifierDeclaration.isVariable();
+  inh boolean IdentifierDeclaration.isFunction();
+  inh boolean IdentifierUse.usedByFunction();
+
+  eq Program.getChild().isVariable() = true;
+  eq FunctionDeclaration.getIdentifierDeclaration().isVariable() = false;
+
+  eq Program.getChild().isFunction() = false;
+  eq FunctionDeclaration.getIdentifierDeclaration().isFunction() = true;
+
+  eq Program.getChild().usedByFunction() = false;
+  eq FunctionCallAsExpression.getIdentifierUse().usedByFunction() = true;
+
+  // Parameter mismatch
+  inh int IdentifierDeclaration.numberOfParameters();
+
+  eq Program.getChild().numberOfParameters() = 0;
+  eq FunctionDeclaration.getIdentifierDeclaration().numberOfParameters() = getNumParameter();
+
+  syn boolean FunctionCallAsExpression.amountOfParamsMismatch() {
+    return getNumParameter() != getIdentifierUse().declaration().numberOfParameters();
+  }
+}
